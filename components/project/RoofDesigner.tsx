@@ -175,10 +175,19 @@ export default function RoofDesigner({
             + engel ekle
           </button>
         </div>
+        {obs.length > 0 && (
+          <div className="grid grid-cols-4 gap-2 mb-1 text-[11px] text-muted">
+            <span>Genişlik (m)</span>
+            <span>Derinlik (m)</span>
+            <span>Adet</span>
+            <span />
+          </div>
+        )}
         {obs.map((o, i) => (
           <div key={i} className="grid grid-cols-4 gap-2 mb-1">
             <input
               type="number"
+              step="0.1"
               className={field}
               value={o.widthM}
               onChange={(e) =>
@@ -188,10 +197,11 @@ export default function RoofDesigner({
                   ),
                 )
               }
-              placeholder="en"
+              placeholder="ör. 1.5"
             />
             <input
               type="number"
+              step="0.1"
               className={field}
               value={o.depthM}
               onChange={(e) =>
@@ -201,7 +211,7 @@ export default function RoofDesigner({
                   ),
                 )
               }
-              placeholder="boy"
+              placeholder="ör. 1.5"
             />
             <input
               type="number"
@@ -273,6 +283,56 @@ export default function RoofDesigner({
             ` · engel kaybı ${layout.obstacleLossPanels} panel`}
         </div>
       </div>
+
+      <details className="rounded-xl border bg-card p-3 text-xs text-muted">
+        <summary className="cursor-pointer font-medium text-brand-dark">
+          Hesap nasıl yapılıyor? (panel ölçüleri)
+        </summary>
+        <div className="mt-2 space-y-1 leading-relaxed">
+          <p>
+            Seçili panel:{" "}
+            <b className="text-brand-dark">
+              {(panel.lengthMm / 1000).toFixed(3)} m ×{" "}
+              {(panel.widthMm / 1000).toFixed(3)} m
+            </b>{" "}
+            ({panel.pmaxW} Wp · {((panel.lengthMm * panel.widthMm) /
+              1_000_000).toFixed(2)}{" "}
+            m²/panel).
+          </p>
+          <p>
+            <b>1.</b> Kullanılabilir alan = çatı ölçüsü − her kenardan{" "}
+            {setbackM} m boşluk.
+          </p>
+          <p>
+            <b>2.</b> Panel yönüne göre hücre boyutu: <i>dikey</i>’de
+            genişlik = panel kısa kenarı, <i>yatay</i>’da panel uzun
+            kenarı. Bir sıraya{" "}
+            <b className="text-brand-dark">{layout.panelsPerRow}</b> panel
+            sığıyor (panel + 2 cm montaj boşluğu).
+          </p>
+          <p>
+            <b>3.</b> Sıra adımı:{" "}
+            {mount === "tilted"
+              ? `tilt ayaklı → D = h·cosβ + h·sinβ/tanα = ${layout.rowPitchM} m (kış gündönümü gölgelemesiz). ${layout.rows} sıra sığıyor.`
+              : `eğimli çatıya paralel → boşluksuz, ${layout.rows} sıra.`}
+          </p>
+          <p>
+            <b>4.</b> Toplam = {layout.panelsPerRow} ×{" "}
+            {layout.rows}
+            {layout.obstacleLossPanels > 0
+              ? ` − ${layout.obstacleLossPanels} (engel alanı / panel alanı)`
+              : ""}{" "}
+            = <b className="text-brand-dark">{layout.totalPanels} panel</b> →{" "}
+            {layout.totalPanels} × {panel.pmaxW} Wp ={" "}
+            <b className="text-brand-dark">{layout.estimatedKwp} kWp</b>.
+          </p>
+          <p>
+            <b>auto</b> yönünde dikey/yatay ayrı hesaplanır, en çok panel
+            sığan seçilir. Engeller bilinen konumsuz olduğundan toplam alan
+            / panel alanı kadar panel düşülür (yaklaşık).
+          </p>
+        </div>
+      </details>
 
       <button
         type="button"
