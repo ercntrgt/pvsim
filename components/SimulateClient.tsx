@@ -12,6 +12,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
+import LocationPicker from "./project/LocationPicker";
 
 type Opt = { id: string; label: string };
 
@@ -148,7 +149,7 @@ export default function SimulateClient({
   const lbl = "text-xs font-medium text-muted mb-1 block";
 
   return (
-    <div className="mt-6 grid lg:grid-cols-[340px_1fr] gap-6">
+    <div className="mt-6 grid lg:grid-cols-[400px_1fr] gap-6">
       {/* Form */}
       <div className="rounded-2xl border bg-card p-5 space-y-3 h-fit">
         <div>
@@ -172,28 +173,13 @@ export default function SimulateClient({
             <option value="tarimsal">Tarımsal</option>
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className={lbl}>Enlem</label>
-            <input
-              type="number"
-              step="0.01"
-              className={field}
-              value={form.latitude}
-              onChange={(e) => set("latitude", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={lbl}>Boylam</label>
-            <input
-              type="number"
-              step="0.01"
-              className={field}
-              value={form.longitude}
-              onChange={(e) => set("longitude", e.target.value)}
-            />
-          </div>
-        </div>
+        <LocationPicker
+          latitude={Number(form.latitude) || 39.93}
+          longitude={Number(form.longitude) || 32.85}
+          onChange={(lat, lon) =>
+            setForm((s) => ({ ...s, latitude: lat, longitude: lon }))
+          }
+        />
         <div>
           <label className={lbl}>Panel</label>
           <select
