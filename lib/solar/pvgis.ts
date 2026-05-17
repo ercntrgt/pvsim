@@ -63,11 +63,12 @@ export function parsePvgisTmy(json: unknown): HourlyWeather[] {
     const month = Number(datePart.slice(4, 6));
     const day = datePart.slice(6, 8);
     const hour = Number(timePart.slice(0, 2));
+    // PVGIS TMY zaman damgaları UTC'dir → açıkça Z ekle.
     return {
       datetime: `${datePart.slice(0, 4)}-${datePart.slice(
         4,
         6,
-      )}-${day}T${String(hour).padStart(2, "0")}:00`,
+      )}-${day}T${String(hour).padStart(2, "0")}:00:00Z`,
       month,
       hour,
       ghi: r["G(h)"] ?? 0,
@@ -153,7 +154,7 @@ export async function fetchPvgisSeriesCalc(
         datetime: `${time.slice(0, 4)}-${time.slice(4, 6)}-${time.slice(
           6,
           8,
-        )}T${String(hour).padStart(2, "0")}:00`,
+        )}T${String(hour).padStart(2, "0")}:00:00Z`,
         month,
         hour,
         ghi: beam + diff + refl,

@@ -8,8 +8,8 @@
  */
 
 import type { HourlyWeather } from "./pvgis";
-import { sunPosition, dayOfYear, extraterrestrialHorizontal } from "./sunPosition";
-import { erbsDecomposition } from "./irradiance";
+import { sunPosition, eccentricityCorrection, dayOfYear } from "./sunPosition";
+import { clearSkyHottel } from "./clearSky";
 
 export interface ClimateSite {
   name: string;
@@ -23,6 +23,16 @@ export interface ClimateSite {
 
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
+interface ClearSkyIrradianceHour {
+  date: Date;
+  zenith: number;
+  /** Yılın günü (eccentricity için). */
+  n: number;
+  ghi: number;
+  dni: number;
+  dhi: number;
+}
+
 export const TR_SITES: ClimateSite[] = [
   {
     name: "Ankara",
@@ -35,7 +45,9 @@ export const TR_SITES: ClimateSite[] = [
     name: "Antalya",
     lat: 36.9,
     lon: 30.7,
-    ghiDaily: [2.55, 3.35, 4.65, 5.75, 6.85, 7.65, 7.75, 7.05, 5.85, 4.35, 3.05, 2.3],
+    // ~1900 kWh/m²/yıl (GEPA/PVGIS — Antalya TR'nin en yüksek ışınımlı
+    // illerinden; konservatif değil, belgelenmiş tipik mertebeler).
+    ghiDaily: [2.6, 3.4, 4.75, 5.85, 7.0, 7.8, 7.9, 7.2, 5.95, 4.45, 3.1, 2.35],
     tempMonthly: [10.0, 10.6, 13.0, 16.3, 20.7, 25.3, 28.4, 28.2, 25.0, 20.4, 15.4, 11.6],
   },
   {
@@ -114,63 +126,105 @@ export function syntheticTmyFromSite(
   lat: number,
   lon: number,
   timezoneOffsetHours = 3,
+  altitudeM = 0,
 ): HourlyWeather[] {
   const out: HourlyWeather[] = [];
-
-  // Önce gün gün açık-hava ağırlıklarını topla, sonra ölçekle.
   const baseYear = 2023;
-  let dayIndex = 0;
+
   for (let month = 0; month < 12; month++) {
-    for (let dom = 1; dom <= DAYS_IN_MONTH[month]; dom++) {
-      const weights: number[] = [];
-      let weightSum = 0;
+    const nDays = DAYS_IN_MONTH[month];
+
+    // 1) Her gün için saatlik açık-hava ışınımını ve günlük bulutluluk
+    //    çarpanını hesapla. Bulutluluk deterministik LCG ile günden güne
+    //    değişir (açık ve kapalı günler karışımı) — gerçek TMY'nin beam/
+    //    difüz dağılımını yakalamak için kritik.
+    const dayClearHourly: ClearSkyIrradianceHour[][] = [];
+    const dayCloudMul: number[] = [];
+    let seed =
+      (Math.floor((lat + 90) * 1000) * 73856093) ^
+      (Math.floor((lon + 180) * 1000) * 19349663) ^
+      ((month + 1) * 83492791);
+    const lcg = () => {
+      seed = (1664525 * (seed >>> 0) + 1013904223) >>> 0;
+      return seed / 0xffffffff;
+    };
+
+    for (let dom = 1; dom <= nDays; dom++) {
+      const hourly: ClearSkyIrradianceHour[] = [];
       for (let h = 0; h < 24; h++) {
         const date = new Date(
           Date.UTC(baseYear, month, dom, h - timezoneOffsetHours, 30),
         );
         const pos = sunPosition(date, lat, lon, timezoneOffsetHours);
-        const w =
+        const n = dayOfYear(date);
+        const cs =
           pos.elevation > 0
-            ? Math.pow(Math.sin((pos.elevation * Math.PI) / 180), 1.15)
-            : 0;
-        weights.push(w);
-        weightSum += w;
+            ? clearSkyHottel(
+                pos.zenith,
+                altitudeM,
+                eccentricityCorrection(n),
+              )
+            : { ghi: 0, dni: 0, dhi: 0 };
+        hourly.push({ date, zenith: pos.zenith, n, ...cs });
       }
-      // Günlük hedef GHI (Wh/m²) = ay ortalaması × 1000
-      const dailyTargetWh = site.ghiDaily[month] * 1000;
+      dayClearHourly.push(hourly);
+      // Türkiye güneşli: çarpan [0.20,1.0], ortalama ≈ 0.70, açığa eğik.
+      const u = lcg();
+      dayCloudMul.push(0.2 + 0.8 * Math.pow(u, 0.6));
+    }
+
+    // 2) Ayı, ortalama günlük GHI gömülü hedefe eşit olacak şekilde ölçekle
+    //    (aylık toplam tam korunur, gün-içi beam/difüz oranı gerçekçi kalır).
+    const targetDailyWh = site.ghiDaily[month] * 1000;
+    let rawDailyMean = 0;
+    for (let d = 0; d < nDays; d++) {
+      const dailyClearGhi = dayClearHourly[d].reduce(
+        (a, x) => a + x.ghi,
+        0,
+      );
+      rawDailyMean += dailyClearGhi * dayCloudMul[d];
+    }
+    rawDailyMean /= nDays;
+    const monthScale =
+      rawDailyMean > 0 ? targetDailyWh / rawDailyMean : 0;
+
+    // 3) Saatlik kayıtları üret. Difüz oran açık-hava ayrımına SABİTLENİR;
+    //    bulutlulukla artar (Erbs round-trip yapılmaz — aksi halde ölçekli
+    //    GHI'de kt düşer ve transpozisyon gerçekçi olmaz).
+    for (let d = 0; d < nDays; d++) {
+      const factor = dayCloudMul[d] * monthScale;
+      const cloudiness = Math.min(1, Math.max(0, 1 - dayCloudMul[d]));
       for (let h = 0; h < 24; h++) {
-        const date = new Date(
-          Date.UTC(baseYear, month, dom, h - timezoneOffsetHours, 30),
-        );
-        const ghi =
-          weightSum > 0 ? (weights[h] / weightSum) * dailyTargetWh : 0;
-        const pos = sunPosition(date, lat, lon, timezoneOffsetHours);
-        const eth = extraterrestrialHorizontal(
-          date,
-          lat,
-          lon,
-          timezoneOffsetHours,
-        );
-        const { dhi, dni } = erbsDecomposition(ghi, eth, pos.zenith);
-        const diurnal =
-          4.5 * Math.sin(((h - 9) / 24) * 2 * Math.PI); // tepe ~15:00
+        const c = dayClearHourly[d][h];
+        const ghi = Math.max(0, c.ghi * factor);
+        let dhi = 0;
+        let dni = 0;
+        if (ghi > 0 && c.ghi > 0) {
+          const clearDf = Math.min(0.5, Math.max(0.1, c.dhi / c.ghi));
+          const df = Math.min(
+            0.92,
+            clearDf + cloudiness * (0.85 - clearDf),
+          );
+          dhi = ghi * df;
+          const cosZ = Math.max(
+            0.02,
+            Math.cos((c.zenith * Math.PI) / 180),
+          );
+          dni = Math.max(0, (ghi - dhi) / cosZ);
+        }
+        const diurnal = 4.5 * Math.sin(((h - 9) / 24) * 2 * Math.PI);
         out.push({
-          datetime: `${baseYear}-${String(month + 1).padStart(
-            2,
-            "0",
-          )}-${String(dom).padStart(2, "0")}T${String(h).padStart(2, "0")}:00`,
+          datetime: c.date.toISOString(),
           month: month + 1,
           hour: h,
-          ghi: Math.max(0, ghi),
+          ghi,
           dni: Math.max(0, dni),
           dhi: Math.max(0, dhi),
           temperature: site.tempMonthly[month] + diurnal,
           windSpeed: 1.5,
         });
       }
-      dayIndex++;
     }
   }
-  void dayIndex;
   return out;
 }
