@@ -17,6 +17,7 @@ import {
 } from "../lossesModel";
 import { performanceRatio, specificYield } from "../performanceRatio";
 import { simulatePvSystem, optimalTilt } from "../pvwatts";
+import { computeRoofLayout } from "../roofLayout";
 import { syntheticTmy } from "../../solar/trClimate";
 
 describe("moduleModel", () => {
@@ -112,6 +113,94 @@ describe("DOĞRULAMA: Ankara çatı GES 10 kWp", () => {
     expect(r.annualAcKwh).toBeLessThanOrEqual(16_000);
     expect(r.performanceRatio).toBeGreaterThanOrEqual(0.78);
     expect(r.performanceRatio).toBeLessThanOrEqual(0.82);
+  });
+});
+
+describe("roofLayout", () => {
+  const panel = {
+    panelLengthMm: 1722,
+    panelWidthMm: 1134,
+    panelPmaxW: 440,
+  };
+
+  it("10×8 m eğimli çatı: makul panel sayısı ve kWp", () => {
+    const r = computeRoofLayout({
+      roofWidthM: 10,
+      roofLengthM: 8,
+      ...panel,
+      orientation: "auto",
+      mount: "flush",
+    });
+    // ~9.4×7.4 m kullanılabilir / ~1.95 m² panel → ~30-40 panel
+    expect(r.totalPanels).toBeGreaterThan(25);
+    expect(r.totalPanels).toBeLessThan(45);
+    expect(r.estimatedKwp).toBeCloseTo(
+      (r.totalPanels * 440) / 1000,
+      2,
+    );
+    expect(["portrait", "landscape"]).toContain(r.orientation);
+  });
+
+  it("auto, en çok panel sığan yönü seçer", () => {
+    const p = computeRoofLayout({
+      roofWidthM: 12,
+      roofLengthM: 6,
+      ...panel,
+      orientation: "portrait",
+      mount: "flush",
+    });
+    const l = computeRoofLayout({
+      roofWidthM: 12,
+      roofLengthM: 6,
+      ...panel,
+      orientation: "landscape",
+      mount: "flush",
+    });
+    const a = computeRoofLayout({
+      roofWidthM: 12,
+      roofLengthM: 6,
+      ...panel,
+      orientation: "auto",
+      mount: "flush",
+    });
+    expect(a.totalPanels).toBe(Math.max(p.totalPanels, l.totalPanels));
+  });
+
+  it("tilted (düz çatı) sıra arası > flush, daha az panel", () => {
+    const flush = computeRoofLayout({
+      roofWidthM: 20,
+      roofLengthM: 20,
+      ...panel,
+      mount: "flush",
+    });
+    const tilted = computeRoofLayout({
+      roofWidthM: 20,
+      roofLengthM: 20,
+      ...panel,
+      mount: "tilted",
+      tiltDeg: 30,
+      latitudeDeg: 39.93,
+    });
+    expect(tilted.rowPitchM).toBeGreaterThan(0);
+    expect(tilted.totalPanels).toBeLessThan(flush.totalPanels);
+  });
+
+  it("engeller panel sayısını düşürür", () => {
+    const base = computeRoofLayout({
+      roofWidthM: 15,
+      roofLengthM: 10,
+      ...panel,
+      mount: "flush",
+    });
+    const withObs = computeRoofLayout({
+      roofWidthM: 15,
+      roofLengthM: 10,
+      ...panel,
+      mount: "flush",
+      obstacles: [{ widthM: 2, depthM: 2, count: 2 }],
+    });
+    expect(withObs.totalPanels).toBeLessThan(base.totalPanels);
+    expect(withObs.obstacleLossPanels).toBeGreaterThan(0);
   });
 });
 

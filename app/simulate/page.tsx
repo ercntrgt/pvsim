@@ -7,6 +7,9 @@ export default function SimulatePage() {
   const panels = getPanels().map((p) => ({
     id: p.id,
     label: `${p.brand} ${p.model} (${p.pmaxW} Wp)`,
+    pmaxW: p.pmaxW,
+    lengthMm: p.lengthMm,
+    widthMm: p.widthMm,
   }));
   const inverters = getInverters().map((i) => ({
     id: i.id,

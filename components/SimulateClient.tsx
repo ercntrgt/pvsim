@@ -13,8 +13,15 @@ import {
   CartesianGrid,
 } from "recharts";
 import LocationPicker from "./project/LocationPicker";
+import RoofDesigner from "./project/RoofDesigner";
 
-type Opt = { id: string; label: string };
+type Opt = {
+  id: string;
+  label: string;
+  pmaxW?: number;
+  lengthMm?: number;
+  widthMm?: number;
+};
 
 const MONTHS = [
   "Oca",
@@ -63,6 +70,8 @@ export default function SimulateClient({
     tariffEscalation: 25,
     preferEmbedded: true,
   });
+  const [sizingMode, setSizingMode] = useState<"kwp" | "roof">("kwp");
+  const selectedPanel = panels.find((p) => p.id === form.panelId);
   const [loading, setLoading] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [res, setRes] = useState<any>(null);
@@ -208,7 +217,35 @@ export default function SimulateClient({
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={lbl}>Boyutlandırma</label>
+          <div className="grid grid-cols-2 gap-1 rounded-lg border p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setSizingMode("kwp")}
+              className={`rounded-md px-2 py-1.5 ${
+                sizingMode === "kwp"
+                  ? "bg-brand text-white"
+                  : "text-muted hover:bg-brand/10"
+              }`}
+            >
+              Hedef kWp
+            </button>
+            <button
+              type="button"
+              onClick={() => setSizingMode("roof")}
+              className={`rounded-md px-2 py-1.5 ${
+                sizingMode === "roof"
+                  ? "bg-brand text-white"
+                  : "text-muted hover:bg-brand/10"
+              }`}
+            >
+              Çatı ölçüsü
+            </button>
+          </div>
+        </div>
+
+        {sizingMode === "kwp" ? (
           <div>
             <label className={lbl}>Hedef Güç (kWp)</label>
             <input
@@ -218,15 +255,33 @@ export default function SimulateClient({
               onChange={(e) => set("targetKwp", e.target.value)}
             />
           </div>
-          <div>
-            <label className={lbl}>Yıllık Tüketim (kWh)</label>
-            <input
-              type="number"
-              className={field}
-              value={form.annualKwh}
-              onChange={(e) => set("annualKwh", e.target.value)}
-            />
-          </div>
+        ) : selectedPanel?.lengthMm ? (
+          <RoofDesigner
+            panel={{
+              pmaxW: selectedPanel.pmaxW ?? 440,
+              lengthMm: selectedPanel.lengthMm ?? 1722,
+              widthMm: selectedPanel.widthMm ?? 1134,
+            }}
+            latitude={Number(form.latitude) || 39.93}
+            onApply={(kwp) => {
+              set("targetKwp", kwp);
+              setSizingMode("kwp");
+            }}
+          />
+        ) : (
+          <p className="text-xs text-muted">
+            Çatı yerleşimi için önce panel seçin.
+          </p>
+        )}
+
+        <div>
+          <label className={lbl}>Yıllık Tüketim (kWh)</label>
+          <input
+            type="number"
+            className={field}
+            value={form.annualKwh}
+            onChange={(e) => set("annualKwh", e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
