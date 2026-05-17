@@ -208,6 +208,10 @@ export async function runFeasibility(input: FeasibilityInput) {
   });
 
   return {
+    project: {
+      name: input.project.name,
+      connectionType: input.project.connectionType,
+    },
     meta: {
       generatedAt: new Date().toISOString(),
       solarSource: solar.source,

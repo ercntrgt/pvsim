@@ -38,7 +38,9 @@ const DEFAULT_BASE =
   process.env.PVGIS_BASE_URL || "https://re.jrc.ec.europa.eu/api/v5_2";
 
 interface PvgisTmyRow {
-  time: string; // "20070101:0010"
+  // PVGIS v5.2 TMY anahtarı "time(UTC)"; bazı sürümlerde "time".
+  "time(UTC)"?: string;
+  time?: string; // "20070101:0010"
   T2m: number;
   RH: number;
   "G(h)": number;
@@ -57,27 +59,38 @@ export function parsePvgisTmy(json: unknown): HourlyWeather[] {
   if (!Array.isArray(rows)) {
     throw new Error("PVGIS TMY yanıtı beklenen formatta değil (tmy_hourly yok)");
   }
-  return rows.map((r) => {
+  const out: HourlyWeather[] = [];
+  for (const r of rows) {
+    // PVGIS v5.2 anahtarı "time(UTC)"; eski/varyant: "time".
+    const rawTime = r["time(UTC)"] ?? r.time;
+    if (typeof rawTime !== "string" || !rawTime.includes(":")) continue;
     // "20070101:0010" → yıl ay gün : saat dk
-    const [datePart, timePart] = r.time.split(":");
+    const [datePart, timePart] = rawTime.split(":");
+    if (!datePart || datePart.length < 8 || !timePart) continue;
     const month = Number(datePart.slice(4, 6));
     const day = datePart.slice(6, 8);
     const hour = Number(timePart.slice(0, 2));
     // PVGIS TMY zaman damgaları UTC'dir → açıkça Z ekle.
-    return {
+    out.push({
       datetime: `${datePart.slice(0, 4)}-${datePart.slice(
         4,
         6,
       )}-${day}T${String(hour).padStart(2, "0")}:00:00Z`,
       month,
       hour,
-      ghi: r["G(h)"] ?? 0,
-      dni: r["Gb(n)"] ?? 0,
-      dhi: r["Gd(h)"] ?? 0,
-      temperature: r.T2m ?? 15,
-      windSpeed: r.WS10m ?? 1,
-    };
-  });
+      ghi: Number(r["G(h)"] ?? 0),
+      dni: Number(r["Gb(n)"] ?? 0),
+      dhi: Number(r["Gd(h)"] ?? 0),
+      temperature: Number(r.T2m ?? 15),
+      windSpeed: Number(r.WS10m ?? 1),
+    });
+  }
+  if (out.length < 8000) {
+    throw new Error(
+      `PVGIS TMY ayrıştırma yetersiz: ${out.length} geçerli saat`,
+    );
+  }
+  return out;
 }
 
 function withTimeout(timeoutSec: number): {

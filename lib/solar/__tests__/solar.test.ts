@@ -18,6 +18,7 @@ import {
   annualGhi,
   TR_SITES,
 } from "../trClimate";
+import { parsePvgisTmy } from "../pvgis";
 
 describe("sunPosition", () => {
   it("dayOfYear", () => {
@@ -146,6 +147,45 @@ describe("irradiance", () => {
       1,
     );
     expect(optimalTilt).toBe(33);
+  });
+});
+
+describe("parsePvgisTmy", () => {
+  function payload(timeKey: "time(UTC)" | "time") {
+    const rows = [];
+    for (let m = 1; m <= 12; m++) {
+      for (let d = 1; d <= 30; d++) {
+        for (let h = 0; h < 24; h++) {
+          rows.push({
+            [timeKey]: `2007${String(m).padStart(2, "0")}${String(
+              d,
+            ).padStart(2, "0")}:${String(h).padStart(2, "0")}10`,
+            T2m: 15,
+            "G(h)": h > 6 && h < 19 ? 400 : 0,
+            "Gb(n)": h > 6 && h < 19 ? 600 : 0,
+            "Gd(h)": h > 6 && h < 19 ? 120 : 0,
+            WS10m: 2,
+          });
+        }
+      }
+    }
+    return { outputs: { tmy_hourly: rows } };
+  }
+
+  it("PVGIS v5.2 'time(UTC)' anahtarını ayrıştırır (regresyon)", () => {
+    const r = parsePvgisTmy(payload("time(UTC)"));
+    expect(r.length).toBe(12 * 30 * 24);
+    expect(r[10].datetime).toMatch(/Z$/);
+    expect(r[12].ghi).toBeGreaterThan(0);
+  });
+
+  it("eski 'time' anahtarıyla da çalışır", () => {
+    const r = parsePvgisTmy(payload("time"));
+    expect(r.length).toBe(12 * 30 * 24);
+  });
+
+  it("tmy_hourly yoksa anlamlı hata", () => {
+    expect(() => parsePvgisTmy({ outputs: {} })).toThrow(/tmy_hourly/);
   });
 });
 

@@ -6,12 +6,14 @@
  * çevre, mevzuat, sonuç.
  */
 import React from "react";
+import path from "node:path";
 import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
+  Font,
   renderToBuffer,
 } from "@react-pdf/renderer";
 import type { FeasibilityResult } from "../simulation";
@@ -19,15 +21,58 @@ import type { FeasibilityResult } from "../simulation";
 const BRAND = "#0B6E4F";
 const DARK = "#1B4332";
 
+// Türkçe karakter (ğ, ı, İ, ş, ç, ö, ü) için Unicode TTF — Helvetica
+// WinAnsi bunları gösteremez. DejaVu Sans repo'da public/fonts altında.
+try {
+  const fontsDir = path.join(process.cwd(), "public", "fonts");
+  Font.register({
+    family: "DejaVu",
+    fonts: [
+      { src: path.join(fontsDir, "DejaVuSans.ttf") },
+      {
+        src: path.join(fontsDir, "DejaVuSans-Bold.ttf"),
+        fontWeight: "bold",
+      },
+    ],
+  });
+} catch {
+  // Font yoksa Helvetica'ya düşer (Türkçe karakterler bozulabilir).
+}
+
+// Enum → okunur Türkçe etiket
+const MOUNT_TR: Record<string, string> = {
+  open_rack: "Açık konstrüksiyon (arazi)",
+  roof_mount: "Çatı üstü",
+  insulated_back: "Yalıtımlı arka",
+};
+const CONN_TR: Record<string, string> = {
+  mesken_cati: "Mesken çatı",
+  ticari_cati: "Ticari çatı",
+  arazi: "Arazi GES",
+  tarimsal: "Tarımsal",
+};
+const SOURCE_TR: Record<string, string> = {
+  pvgis: "PVGIS (TMY)",
+  "nasa-power": "NASA POWER",
+  "embedded-tr": "Gömülü TR iklim verisi",
+};
+const trLabel = (m: Record<string, string>, k: string) => m[k] ?? k;
+
 const s = StyleSheet.create({
-  page: { padding: 36, fontSize: 9, color: "#14241d", fontFamily: "Helvetica" },
-  h1: { fontSize: 18, color: DARK, fontFamily: "Helvetica-Bold" },
+  page: { padding: 36, fontSize: 9, color: "#14241d", fontFamily: "DejaVu" },
+  h1: {
+    fontSize: 18,
+    color: DARK,
+    fontFamily: "DejaVu",
+    fontWeight: "bold",
+  },
   h2: {
     fontSize: 12,
     color: BRAND,
     marginTop: 16,
     marginBottom: 6,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "DejaVu",
+    fontWeight: "bold",
     borderBottom: `1 solid ${BRAND}`,
     paddingBottom: 3,
   },
@@ -41,12 +86,18 @@ const s = StyleSheet.create({
     borderRadius: 4,
   },
   kpiLabel: { fontSize: 7, color: "#5b6f66" },
-  kpiVal: { fontSize: 13, color: DARK, fontFamily: "Helvetica-Bold" },
+  kpiVal: {
+    fontSize: 13,
+    color: DARK,
+    fontFamily: "DejaVu",
+    fontWeight: "bold",
+  },
   th: {
     flexDirection: "row",
     backgroundColor: DARK,
     color: "white",
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "DejaVu",
+    fontWeight: "bold",
   },
   td: { flexDirection: "row", borderBottom: "0.5 solid #e2ece7" },
   cell: { padding: 3, fontSize: 7.5 },
@@ -111,11 +162,12 @@ export function FeasibilityReport({ r }: { r: FeasibilityResult }) {
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <Text style={s.h1}>Güneş Enerjisi Fizibilite Raporu</Text>
+        <Text style={s.h1}>{r.project.name}</Text>
         <Text style={s.sub}>
-          {r.system.dcKwp} kWp · {r.system.panel.brand}{" "}
-          {r.system.panel.model} · {r.meta.generatedAt.slice(0, 10)} ·
-          PVSim / yesilsertifika.tech
+          Güneş Enerjisi Fizibilite Raporu ·{" "}
+          {trLabel(CONN_TR, r.project.connectionType)} · {r.system.dcKwp}{" "}
+          kWp · {r.system.panel.brand} {r.system.panel.model} ·{" "}
+          {r.meta.generatedAt.slice(0, 10)} · PVSim / yesilsertifika.tech
         </Text>
 
         <Text style={s.h2}>1. Yönetici Özeti</Text>
@@ -156,22 +208,39 @@ export function FeasibilityReport({ r }: { r: FeasibilityResult }) {
 
         <Text style={s.h2}>2. Proje & Konum</Text>
         <Text>
-          Bağlantı tipi: {r.system.mountType} · Eğim {r.system.tilt}° /
-          Azimut {r.system.azimuth}° · DC {r.system.dcKwp} kWp / AC{" "}
-          {r.system.acKw} kW (DC/AC{" "}
+          Montaj: {trLabel(MOUNT_TR, r.system.mountType)} · Eğim{" "}
+          {r.system.tilt}° / Azimut {r.system.azimuth}° · DC{" "}
+          {r.system.dcKwp} kWp / AC {r.system.acKw} kW (DC/AC{" "}
           {(r.system.dcKwp / r.system.acKw).toFixed(2)})
         </Text>
         <Text style={s.sub}>
-          Solar veri kaynağı: {r.meta.solarSource} · Yıllık GHI{" "}
-          {fmt(r.energy.annualGhiKwhM2)} kWh/m² · POA{" "}
+          Solar veri kaynağı: {trLabel(SOURCE_TR, r.meta.solarSource)} ·
+          Yıllık GHI {fmt(r.energy.annualGhiKwhM2)} kWh/m² · POA{" "}
           {fmt(r.energy.annualPoaKwhM2)} kWh/m² · Ort. hücre sıc.{" "}
           {r.energy.avgCellTempC}°C
         </Text>
 
-        <Text style={s.h2}>3. Sistem</Text>
+        <Text style={s.h2}>3. Sistem & Panel Yerleşimi</Text>
         <Text>
-          {r.system.sizing.recommendation}
+          {r.system.sizing.panelCount} panel ×{" "}
+          {r.system.panel.pmaxW} Wp ({r.system.sizing.panelsPerString}{" "}
+          panel/string, {r.system.sizing.stringCount} string) ·{" "}
+          {r.system.inverterCount} × {r.system.inverter.brand}{" "}
+          {r.system.inverter.model}
         </Text>
+        <Text style={s.sub}>
+          Tahmini kaplama alanı ~{fmt(r.system.sizing.estimatedAreaM2)} m²
+          · String Voc (soğuk) {r.system.sizing.stringVocColdV} V · DC/AC{" "}
+          {r.system.sizing.dcAcRatio}
+        </Text>
+        {r.system.sizing.checks.map((c, i) => (
+          <Text
+            key={i}
+            style={{ color: c.ok ? "#0B6E4F" : "#b45309", fontSize: 8 }}
+          >
+            {c.ok ? "✓" : "⚠"} {c.label}: {c.detail}
+          </Text>
+        ))}
 
         <Text style={s.h2}>4. Aylık Enerji Üretimi (kWh)</Text>
         <View style={s.th}>
