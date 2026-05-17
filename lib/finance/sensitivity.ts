@@ -177,36 +177,51 @@ export function monteCarlo(
 }
 
 export interface ScenarioComparison {
-  /** GES yatırımının 25 yıl sonundaki birikmiş net değeri (nominal). */
+  /**
+   * GES: CapEx yatırılır, yıllık net işletme akışları mevduat faizinde
+   * yeniden değerlendirilir → ömür sonu servet (nominal ₺).
+   */
   pvInvestmentTerminal: number;
-  /** Aynı CapEx banka mevduatında olsaydı (nominal getiri ile). */
+  /** Aynı CapEx 1. günden mevduatta bileşik → ömür sonu servet. */
   bankDepositTerminal: number;
-  /** "Yatırım yapma" (parayı yastık altında) — referans. */
+  /** "Yatırım yapma" — referans (servet yok). */
   doNothingTerminal: number;
-  /** GES, mevduata göre kaç ₺ daha fazla / az. */
+  /** GES serveti − mevduat serveti (pozitif → GES avantajlı). */
   advantageOverDeposit: number;
 }
 
 /**
  * "Bu GES vs. banka mevduatı vs. hiç yatırım yapmama" karşılaştırması.
- * depositRate: yıllık brüt mevduat faizi (örn 0.40).
+ *
+ * Adil terminal-servet bazı: HER İKİ senaryoda da başlangıç sermayesi
+ * `capex`. Mevduat: capex 1. günden faize girer, ömür sonuna bileşiklenir.
+ * GES: capex tesise harcanır; yıllık proje (unlevered) net nakit akışları
+ * aynı mevduat faizinde ömür sonuna kadar yeniden değerlendirilir.
+ *
+ * @param depositRate yıllık brüt mevduat faizi (örn 0.40)
  */
 export function compareScenarios(
   base: FinanceInputs,
   depositRate: number,
 ): ScenarioComparison {
   const r = buildCashflow(base);
-  // GES: net akışların nominal birikimi (reinvest edilmeden) + (özkaynak)
-  const pvTerminal = r.equityCashFlows
-    .slice(1)
-    .reduce((acc, cf) => acc + cf, 0);
-  const bankTerminal =
-    base.capex * Math.pow(1 + depositRate, base.lifetimeYears) - base.capex;
+  const n = base.lifetimeYears;
+
+  // GES: proje akışları (capex hariç) mevduatta reinvest, ömür sonuna FV.
+  let gesTerminal = 0;
+  for (let t = 1; t <= n; t++) {
+    const cf = r.projectCashFlows[t] ?? 0; // t. yıl işletme net akışı
+    gesTerminal += cf * Math.pow(1 + depositRate, n - t);
+  }
+
+  // Mevduat: aynı capex 1. günden bileşik.
+  const bankTerminal = base.capex * Math.pow(1 + depositRate, n);
+
   return {
-    pvInvestmentTerminal: Math.round(pvTerminal),
+    pvInvestmentTerminal: Math.round(gesTerminal),
     bankDepositTerminal: Math.round(bankTerminal),
     doNothingTerminal: 0,
-    advantageOverDeposit: Math.round(pvTerminal - bankTerminal),
+    advantageOverDeposit: Math.round(gesTerminal - bankTerminal),
   };
 }
 

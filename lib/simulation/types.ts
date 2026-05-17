@@ -68,6 +68,8 @@ export interface FeasibilityInput {
     annualOpex?: number;
     inverterReplacementYear?: number;
     inverterReplacementShareOfCapex?: number;
+    /** Karşılaştırma için yıllık brüt mevduat faizi (0.40 = %40). */
+    depositRate?: number;
     loan?: {
       principal?: number;
       /** CapEx'e oran (0-1), principal yoksa kullanılır. */

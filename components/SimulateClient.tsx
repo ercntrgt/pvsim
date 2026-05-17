@@ -69,6 +69,11 @@ export default function SimulateClient({
     discountRate: 18,
     tariffEscalation: 25,
     preferEmbedded: true,
+    useLoan: false,
+    loanSharePct: 70,
+    loanRatePct: 45,
+    loanTermYears: 7,
+    depositRatePct: 40,
   });
   const [sizingMode, setSizingMode] = useState<"kwp" | "roof">("kwp");
   const selectedPanel = panels.find((p) => p.id === form.panelId);
@@ -77,6 +82,7 @@ export default function SimulateClient({
   const [res, setRes] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [xlsLoading, setXlsLoading] = useState(false);
 
   const set = (k: string, v: string | number | boolean) =>
     setForm((s) => ({ ...s, [k]: v }));
@@ -107,6 +113,16 @@ export default function SimulateClient({
         discountRate: Number(form.discountRate) / 100,
         tariffEscalation: Number(form.tariffEscalation) / 100,
         opexEscalation: Number(form.tariffEscalation) / 100,
+        depositRate: Number(form.depositRatePct) / 100,
+        ...(form.useLoan
+          ? {
+              loan: {
+                shareOfCapex: Number(form.loanSharePct) / 100,
+                annualRate: Number(form.loanRatePct) / 100,
+                termYears: Number(form.loanTermYears),
+              },
+            }
+          : {}),
       },
     };
   }
@@ -151,6 +167,29 @@ export default function SimulateClient({
       setErr((e as Error).message);
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function downloadExcel() {
+    setXlsLoading(true);
+    try {
+      const r = await fetch("/api/report/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: buildInput() }),
+      });
+      if (!r.ok) throw new Error("Excel üretilemedi");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "pvsim-rapor.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setXlsLoading(false);
     }
   }
 
@@ -359,6 +398,65 @@ export default function SimulateClient({
           />
           Gömülü TR iklim verisi kullan (PVGIS yerine, hızlı/offline)
         </label>
+
+        <details className="rounded-lg border p-3 text-sm">
+          <summary className="cursor-pointer font-medium text-brand-dark">
+            Finansman & Karşılaştırma (banka için)
+          </summary>
+          <div className="mt-3 space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={form.useLoan}
+                onChange={(e) => set("useLoan", e.target.checked)}
+              />
+              Banka kredisi kullan (özkaynak IRR + DSCR)
+            </label>
+            {form.useLoan && (
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <span className="text-[11px] text-muted">Kredi %CapEx</span>
+                  <input
+                    type="number"
+                    className={field}
+                    value={form.loanSharePct}
+                    onChange={(e) => set("loanSharePct", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted">Faiz %</span>
+                  <input
+                    type="number"
+                    className={field}
+                    value={form.loanRatePct}
+                    onChange={(e) => set("loanRatePct", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted">Vade (yıl)</span>
+                  <input
+                    type="number"
+                    className={field}
+                    value={form.loanTermYears}
+                    onChange={(e) => set("loanTermYears", e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+            <div>
+              <span className="text-[11px] text-muted">
+                Karşılaştırma: banka mevduat faizi %
+              </span>
+              <input
+                type="number"
+                className={field}
+                value={form.depositRatePct}
+                onChange={(e) => set("depositRatePct", e.target.value)}
+              />
+            </div>
+          </div>
+        </details>
+
         <button
           onClick={run}
           disabled={loading}
@@ -480,6 +578,125 @@ export default function SimulateClient({
               </ResponsiveContainer>
             </div>
 
+            <div className="rounded-2xl border bg-card p-5 text-sm grid sm:grid-cols-2 gap-4">
+              <div>
+                <h3 className="font-semibold text-brand-dark mb-2">
+                  Sistem & Panel Yerleşimi
+                </h3>
+                <p>
+                  {res.system.sizing.panelCount} panel ·{" "}
+                  {res.system.sizing.panelsPerString}/string ×{" "}
+                  {res.system.sizing.stringCount} string
+                </p>
+                <p>
+                  {res.system.inverterCount} × {res.system.inverter.brand}{" "}
+                  {res.system.inverter.model}
+                </p>
+                <p className="text-muted">
+                  ~{tl(res.system.sizing.estimatedAreaM2)} m² · DC/AC{" "}
+                  {res.system.sizing.dcAcRatio} · Voc(soğuk){" "}
+                  {res.system.sizing.stringVocColdV} V
+                </p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-brand-dark mb-2">
+                  Öz Tüketim & Finansman
+                </h3>
+                <p>
+                  Öz tüketim %
+                  {(res.consumption.selfConsumptionRate * 100).toFixed(0)} ·
+                  Öz yeterlilik %
+                  {(res.consumption.selfSufficiency * 100).toFixed(0)}
+                </p>
+                <p className="text-muted">
+                  Şebekeye {tl(res.consumption.exported)} kWh · Değer{" "}
+                  {res.finance.blendedValuePerKwh.toFixed(3)} ₺/kWh
+                </p>
+                {res.finance.minDscr != null && (
+                  <p className="text-brand-dark">
+                    Özkaynak IRR %
+                    {(res.finance.equityIrr * 100).toFixed(1)} · Min DSCR{" "}
+                    {res.finance.minDscr.toFixed(2)}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-card p-5">
+              <h3 className="font-semibold text-brand-dark mb-3">
+                Duyarlılık — NPV Etkisi (±%20)
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  layout="vertical"
+                  data={res.finance.sensitivity.map(
+                    (t: { label: string; swing: number }) => ({
+                      ad: t.label,
+                      etki: Math.round(t.swing),
+                    }),
+                  )}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2ece7" />
+                  <XAxis type="number" fontSize={10} />
+                  <YAxis
+                    type="category"
+                    dataKey="ad"
+                    width={130}
+                    fontSize={10}
+                  />
+                  <Tooltip />
+                  <Bar
+                    dataKey="etki"
+                    fill="#0B6E4F"
+                    radius={[0, 4, 4, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="rounded-2xl border bg-card p-5 text-sm">
+              <h3 className="font-semibold text-brand-dark mb-3">
+                GES vs Banka Mevduatı (25 yıl, nominal)
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-xs text-muted">GES (özkaynak)</div>
+                  <div className="num text-lg font-semibold text-brand-dark">
+                    {tl(res.finance.scenarioVsDeposit.pvInvestmentTerminal)}{" "}
+                    ₺
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted">
+                    Mevduat %
+                    {(res.finance.depositRate * 100).toFixed(0)}
+                  </div>
+                  <div className="num text-lg">
+                    {tl(
+                      res.finance.scenarioVsDeposit.bankDepositTerminal,
+                    )}{" "}
+                    ₺
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted">GES avantajı</div>
+                  <div
+                    className={`num text-lg font-semibold ${
+                      res.finance.scenarioVsDeposit
+                        .advantageOverDeposit >= 0
+                        ? "text-brand"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {tl(
+                      res.finance.scenarioVsDeposit.advantageOverDeposit,
+                    )}{" "}
+                    ₺
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-2xl border bg-card p-5 text-sm">
               <h3 className="font-semibold text-brand-dark mb-2">
                 Mevzuat & Kaynak
@@ -502,13 +719,22 @@ export default function SimulateClient({
               )}
             </div>
 
-            <button
-              onClick={downloadPdf}
-              disabled={pdfLoading}
-              className="rounded-2xl bg-brand-dark px-5 py-3 font-semibold text-white hover:opacity-90 disabled:opacity-60"
-            >
-              {pdfLoading ? "PDF hazırlanıyor…" : "PDF Rapor İndir"}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={downloadPdf}
+                disabled={pdfLoading}
+                className="rounded-2xl bg-brand-dark px-5 py-3 font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {pdfLoading ? "PDF hazırlanıyor…" : "PDF Rapor İndir"}
+              </button>
+              <button
+                onClick={downloadExcel}
+                disabled={xlsLoading}
+                className="rounded-2xl border border-brand px-5 py-3 font-semibold text-brand hover:bg-brand/10 disabled:opacity-60"
+              >
+                {xlsLoading ? "Excel hazırlanıyor…" : "Excel İndir"}
+              </button>
+            </div>
           </>
         )}
       </div>

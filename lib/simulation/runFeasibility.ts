@@ -22,7 +22,7 @@ import { matchGenerationConsumption } from "../consumption/matcher";
 import { computeNetMetering } from "../tariff/netMetering";
 import { TR_DEFAULT_TARIFFS, type TariffStructure } from "../tariff/trTariffs";
 import { buildCashflow } from "../finance/cashflow";
-import { tornado } from "../finance/sensitivity";
+import { tornado, compareScenarios } from "../finance/sensitivity";
 import { environmentalImpact } from "../environment/co2";
 import { checkEpdkCompliance } from "../regulation/epdk";
 import { assessYekdem } from "../regulation/yekdem";
@@ -152,7 +152,7 @@ export async function runFeasibility(input: FeasibilityInput) {
       Math.round(capex * (input.finance.loan.shareOfCapex ?? 0))
     : 0;
 
-  const finance = buildCashflow({
+  const financeInputs = {
     capex,
     lifetimeYears,
     discountRate,
@@ -172,19 +172,14 @@ export async function runFeasibility(input: FeasibilityInput) {
             termYears: input.finance.loan.termYears,
           }
         : undefined,
-  });
+  };
 
-  const sensitivity = tornado({
-    capex,
-    lifetimeYears,
-    discountRate,
-    annualEnergyKwh: pv.annualAcKwh,
-    degradationRate: panel.annualDegradationPct / 100,
-    energyValuePerKwh: netMetering.blendedValuePerKwh,
-    tariffEscalation,
-    annualOpex,
-    opexEscalation,
-  });
+  const finance = buildCashflow(financeInputs);
+  const sensitivity = tornado(financeInputs);
+
+  // GES vs banka mevduatı vs hiç yatırım yapmama
+  const depositRate = input.finance.depositRate ?? 0.4;
+  const scenarioVsDeposit = compareScenarios(financeInputs, depositRate);
 
   // ── 9. Çevre ────────────────────────────────────────────────
   const environment = environmentalImpact({
@@ -253,8 +248,10 @@ export async function runFeasibility(input: FeasibilityInput) {
       discountRate,
       tariffEscalation,
       blendedValuePerKwh: netMetering.blendedValuePerKwh,
+      depositRate,
       ...finance,
       sensitivity,
+      scenarioVsDeposit,
     },
     environment,
     regulation: { epdk, yekdem },

@@ -67,6 +67,7 @@ export const feasibilityInputSchema = z.object({
     annualOpex: z.number().nonnegative().optional(),
     inverterReplacementYear: z.number().int().min(1).max(40).optional(),
     inverterReplacementShareOfCapex: z.number().min(0).max(1).optional(),
+    depositRate: z.number().min(0).max(2).optional(),
     loan: z
       .object({
         principal: z.number().positive().optional(),

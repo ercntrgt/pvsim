@@ -10,6 +10,7 @@ import {
   buildCashflow,
   tornado,
   monteCarlo,
+  compareScenarios,
 } from "../index";
 import type { FinanceInputs } from "../types";
 
@@ -183,5 +184,31 @@ describe("sensitivity", () => {
     expect(a.npv.p50).toBe(b.npv.p50); // deterministik seed
     expect(a.probabilityNpvPositive).toBeGreaterThanOrEqual(0);
     expect(a.probabilityNpvPositive).toBeLessThanOrEqual(1);
+  });
+
+  it("compareScenarios adil terminal-servet bazında", () => {
+    const inp: FinanceInputs = {
+      capex: 200_000,
+      lifetimeYears: 25,
+      discountRate: 0.15,
+      annualEnergyKwh: 15_000,
+      degradationRate: 0.005,
+      energyValuePerKwh: 3,
+      tariffEscalation: 0.25,
+      annualOpex: 4_000,
+      opexEscalation: 0.25,
+    };
+    const c = compareScenarios(inp, 0.42);
+    // Her iki senaryo da pozitif servet üretir (eski hata: GES reinvest
+    // edilmiyordu → milyarlarca ₺ yapay fark).
+    expect(c.pvInvestmentTerminal).toBeGreaterThan(0);
+    expect(c.bankDepositTerminal).toBeGreaterThan(0);
+    expect(c.advantageOverDeposit).toBe(
+      c.pvInvestmentTerminal - c.bankDepositTerminal,
+    );
+    // Aynı mertebede olmalı (mevduat GES'in ~100 katı OLMAMALI).
+    expect(c.pvInvestmentTerminal).toBeGreaterThan(
+      c.bankDepositTerminal * 0.1,
+    );
   });
 });
