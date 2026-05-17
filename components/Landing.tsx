@@ -100,7 +100,10 @@ const fade: Variants = {
 
 export default function Landing() {
   return (
-    <div className="bg-[#070d0a] text-zinc-100">
+    <div
+      className="min-h-screen bg-[#070d0a] text-zinc-100"
+      style={{ backgroundColor: "#070d0a", color: "#f4f4f5" }}
+    >
       {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute -top-40 -left-32 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
