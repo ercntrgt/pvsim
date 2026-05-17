@@ -1,0 +1,40 @@
+{
+  "year": 2026,
+  "currency": "TRY",
+  "note": "2026 başı tahmini mertebeler. EPDK çeyreklik günceller; UI tarife editöründen güncellenebilir. Birim ₺/kWh, vergiler oran.",
+  "source": "EPDK / EPİAŞ tipik tarife yapısı (gösterge)",
+  "tariffs": {
+    "mesken": {
+      "category": "mesken",
+      "timeOfUse": "single",
+      "activeEnergy": { "single": 2.45, "gunduz": 2.35, "puant": 3.85, "gece": 1.55 },
+      "distribution": 1.05,
+      "taxes": { "energyFund": 0.01, "trtShare": 0, "municipalTax": 0.05, "vat": 0.2 },
+      "year": 2026
+    },
+    "ticarethane": {
+      "category": "ticarethane",
+      "timeOfUse": "single",
+      "activeEnergy": { "single": 3.05, "gunduz": 2.95, "puant": 4.55, "gece": 1.95 },
+      "distribution": 1.15,
+      "taxes": { "energyFund": 0.01, "trtShare": 0, "municipalTax": 0.05, "vat": 0.2 },
+      "year": 2026
+    },
+    "sanayi": {
+      "category": "sanayi",
+      "timeOfUse": "three",
+      "activeEnergy": { "single": 2.85, "gunduz": 2.75, "puant": 4.25, "gece": 1.8 },
+      "distribution": 0.85,
+      "taxes": { "energyFund": 0.01, "trtShare": 0, "municipalTax": 0.01, "vat": 0.2 },
+      "year": 2026
+    },
+    "tarimsal": {
+      "category": "tarimsal",
+      "timeOfUse": "single",
+      "activeEnergy": { "single": 2.25, "gunduz": 2.15, "puant": 3.45, "gece": 1.45 },
+      "distribution": 0.75,
+      "taxes": { "energyFund": 0.01, "trtShare": 0, "municipalTax": 0.01, "vat": 0.2 },
+      "year": 2026
+    }
+  }
+}
