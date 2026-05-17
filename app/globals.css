@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
+/* yesilsertifika.tech kurumsal kimlik */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7faf8;
+  --foreground: #14241d;
+  --brand: #0b6e4f;
+  --brand-dark: #1b4332;
+  --brand-soft: #52b788;
+  --accent-sun: #ffb627;
+  --card: #ffffff;
+  --border: #e2ece7;
+  --muted: #5b6f66;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-soft: var(--brand-soft);
+  --color-accent-sun: var(--accent-sun);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --radius-2xl: 1rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
